@@ -41,7 +41,7 @@ def calcular_sha256sum(archivo):
     return sha256sum.hexdigest()
 
 # VirusTotal api: https://developers.virustotal.com/reference/overview
-def analizar_vt(API_KEY_VT, path, isfile):
+def analizar_vt(api_key, path, isfile):
     print(Fore.CYAN +'\n>> Analizando con VirusTotal')
     if argisfile:
         query = calcular_md5(path)
@@ -50,7 +50,7 @@ def analizar_vt(API_KEY_VT, path, isfile):
 
     headers = {
         "accept": "application/json",
-        "x-apikey": API_KEY_VT
+        "x-apikey": api_key
     }
     response = requests.get(URL_SERCH_VT+'?query='+str(query), headers=headers)
 
@@ -58,13 +58,28 @@ def analizar_vt(API_KEY_VT, path, isfile):
         # Obtener las categorías de análisis
         data = response.json()
         if data['data'] == []:
-            print(Fore.YELLOW + 'No hay registro de este archivo en VirusTotal')
+            # Necesita subir el archivo para analizarlo
+            url_upload = "https://www.virustotal.com/api/v3/files"
+
+            files = { "file": (str(path), open(str(path), "rb"), "application/octet-stream") }
+            headers = {
+                "accept": "application/json",
+                "x-apikey": api_key
+            }
+
+            response = requests.post(url_upload, files=files, headers=headers)
+
+            data = response.json()
+            data_id = data['data']['id']
+            print(Fore.YELLOW + 'No hay registro de este archivo en VirusTotal, se está subiendo en estos momentos')
+            print(Fore.YELLOW + 'Puedes ver los resultados con cualquiera de los hashes generados\n')
+            
         else:
             analysis = data['data'][0]['attributes']['last_analysis_stats']
             reputation = data['data'][0]['attributes']['reputation']           
 
             # Comprobar si al menos una categoría es "malicious"
-            if analysis['malicious'] > 0 or (reputation <= 0 and isfile):
+            if analysis['malicious'] > 0 or (reputation < 0 and isfile):
                 print(Fore.RED + "[-] NO es seguro segun VirusTotal.")
             else:
                 print(Fore.GREEN + "[+] Es seguro segun VirusTotal.")
@@ -91,13 +106,8 @@ def analizar_fs(api_key, path, isfile):
                 "accept": "application/json",
                 "X-Api-Key": api_key
             }
-            id_report = data['filescan_reports'][0]['report_id']
-            response_info = requests.get('https://www.filescan.io/api/reports/' + id_report + '/chat-gpt', headers=headers_info)
-            data_info = response_info.json()
 
             if verdict == 'unknown' or verdict == 'informational':
-                print('Puedes buscar con el id en: ' + Fore.BLUE + 'https://filescan.io')
-                print('\tid: ' + Fore.MAGENTA + id_report + '\n')
                 # POST req
                 headers_id_file = {
                     "accept": "application/json",
@@ -145,6 +155,14 @@ def analizar_fs(api_key, path, isfile):
                             time.sleep(10)
                             response = requests.get('https://www.filescan.io/api/scan/' + id_file + '/report?filter=general', headers=headers_file)
                             data = response.json()
+                        
+                        id_report = ''
+                        for report_id, report_data in data['reports'].items():
+                            if id_report == '':
+                                id_report = report_id
+                                print('Puedes buscar con el id en: ' + Fore.BLUE + 'https://filescan.io')
+                                print('\tid: ' + Fore.MAGENTA + id_report + '\n')
+                                break
 
                         # Accede al resultado de "verdict" en cada informe
                         verdict = data['sourceArchive']['verdict']
@@ -159,6 +177,9 @@ def analizar_fs(api_key, path, isfile):
                 else:
                     print('Error status code')
             else:
+                id_report = data['filescan_reports'][0]['report_id']
+                response_info = requests.get('https://www.filescan.io/api/reports/' + id_report + '/chat-gpt', headers=headers_info)
+                data_info = response_info.json()
                 if data_info["data"] != None:
                     print('\n' + data_info["data"] + '\n')
                     print('Puedes buscar con el id en: ' + Fore.BLUE + 'https://filescan.io')
