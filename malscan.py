@@ -9,8 +9,8 @@ from virus_total_apis import PublicApi as VirusTotalPublicApi
 from colorama import Fore, Back, Style, init
 
 # Tu clave de API de VirusTotal
-API_KEY_VT = '4e603c3a01a10515c1b1da28ccf061540958ed1b7932867e458774a4771c785b'
-API_KEY_FS = '_8BT_v2Tb1CNlUql7IOziEuY9ziKz5G6FuyO11wD'
+API_KEY_VT = 'api_key'
+API_KEY_FS = 'api_key'
 URL_SERCH_VT = 'https://www.virustotal.com/api/v3/search'
 
 # Calcula el hash md5 para un archivo
@@ -42,6 +42,7 @@ def calcular_sha256sum(archivo):
 
 # VirusTotal api: https://developers.virustotal.com/reference/overview
 def analizar_vt(API_KEY_VT, path, isfile):
+    print(Fore.CYAN +'\n>> Analizando con VirusTotal')
     if argisfile:
         query = calcular_md5(path)
     else:
@@ -57,7 +58,7 @@ def analizar_vt(API_KEY_VT, path, isfile):
         # Obtener las categorías de análisis
         data = response.json()
         if data['data'] == []:
-            print('No hay registro de este archivo en VirusTotal')
+            print(Fore.YELLOW + 'No hay registro de este archivo en VirusTotal')
         else:
             analysis = data['data'][0]['attributes']['last_analysis_stats']
             reputation = data['data'][0]['attributes']['reputation']           
@@ -72,6 +73,7 @@ def analizar_vt(API_KEY_VT, path, isfile):
 
 # Analizando con https://www.filescan.io
 def analizar_fs(api_key, path, isfile):
+    print(Fore.CYAN + '\n>> Analizando con filescan.io')
     # Analizamos la reputación en filescan.io
     if isfile:
         sha256 = calcular_sha256sum(path)
@@ -121,7 +123,6 @@ def analizar_fs(api_key, path, isfile):
                 if response_id_file.status_code == 200:
                     data_json = response_id_file.json()
                     id_file = data_json['flow_id']
-                    print(id_file)
 
                     headers_file = {
                     "accept": "application/json",
@@ -141,7 +142,7 @@ def analizar_fs(api_key, path, isfile):
                             color = Fore.RED
                         else:                
                             color = Fore.YELLOW
-                        print('Según filescan.io el enlace es ' + color + verdict)
+                        print('Según filescan.io el archivo es ' + color + verdict)
                     else:
                         print('Respuesta vacía o no es un código de estado 200')
                 else:
@@ -211,13 +212,16 @@ if __name__ == "__main__":
 
     if not os.path.exists(args):
         if args:
+            print('Analisis de la url: ' + Fore.MAGENTA + args + '\n')
             argisfile = False
             analizar_vt(API_KEY_VT, args, argisfile)
             analizar_fs(API_KEY_FS, args, argisfile)
 
         else:
-            print(Fore.YELLOW + "nEl parámetro es incorrecto.")
+            print(Fore.YELLOW + "El parámetro es incorrecto.")
     else:
+        print('Analisis del achivo: ' + Fore.MAGENTA + args + '\n')
+        print('MD5: ' + calcular_md5(args))
+        print('SHA256: ' + calcular_sha256sum(args))
         analizar_vt(API_KEY_VT, args, argisfile)
         analizar_fs(API_KEY_FS, args, argisfile)
-
