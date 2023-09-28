@@ -68,7 +68,7 @@ def analizar_vt(API_KEY_VT, path, isfile):
             else:
                 print(Fore.GREEN + "[+] Es seguro segun VirusTotal.")
     else:
-        print(Fore.YELLOW + "nError al buscar en VirusTotal.")
+        print(Fore.YELLOW + "Error al buscar en VirusTotal.")
 
 # Analizando con https://www.filescan.io
 def analizar_fs(api_key, path, isfile):
@@ -154,7 +154,7 @@ def analizar_fs(api_key, path, isfile):
                 print('Según filescan.io el archivo es ' + color + verdict)
         else:
             print('Algo ha ido mal en filescan.io')
-    elif path.startswith("http://") or path.startswith("https://"):
+    elif str(path).startswith("http://") or str(path).startswith("https://"):
         url_encode = quote(path)
         headers_id = {
             "accept": "application/json",
@@ -163,27 +163,34 @@ def analizar_fs(api_key, path, isfile):
         }
         data_id = 'save_preset=false&url=' + url_encode + '&tags=&propagate_tags=true&password=&is_private=false&skip_whitelisted=false'
         response_id_url = requests.post('https://www.filescan.io/api/scan/url', headers=headers_id, data=data_id)
-        if response_id_url.status_code == 200:
+
+        if response_id_url.status_code == 200:  
             data_json = response_id_url.json()
             id_url = data_json['flow_id']
         else:
             print('Error status code')
-
-        # Espera durante 40 segundos para que la petición anterior se guarde y podamos consultar la respuesta
-        time.sleep(40)
 
         headers_report = {
             "accept": "application/json",
             "X-Api-Key": api_key
         }
         response = requests.get('https://www.filescan.io/api/scan/' + id_url + '/report?filter=finalVerdict', headers=headers_report)
-        data = response.json()
 
-        if response.status_code == 200 and data['reports'] is not None:
+        if response.status_code == 200:
+            data = response.json()
+            bolVerdict = True
+            while  bolVerdict:
+                time.sleep(5)
+                response = requests.get('https://www.filescan.io/api/scan/' + id_url + '/report?filter=finalVerdict', headers=headers_report)
+                data = response.json()
+                for report_id, report_data in data['reports'].items():
+                    # Accede al resultado de "verdict" en cada informe
+                    if report_data['finalVerdict']['verdict'] != 'UNKNOWN': 
+                        bolVerdict = False
+        
             for report_id, report_data in data['reports'].items():
                 # Accede al resultado de "verdict" en cada informe
                 verdict = report_data['finalVerdict']['verdict']
-                print(verdict)
 
                 if 'malicious' in verdict:
                     color = Fore.RED
@@ -195,14 +202,12 @@ def analizar_fs(api_key, path, isfile):
             print('Respuesta vacía o no es un código de estado 200')
 
 
-
 if __name__ == "__main__":
     # Inicializa colorama
     init(autoreset=True)
 
     argisfile = True
     args = sys.argv[1]
-    print(calcular_sha256sum(args))
 
     if not os.path.exists(args):
         if args:
