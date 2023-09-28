@@ -9,8 +9,8 @@ from virus_total_apis import PublicApi as VirusTotalPublicApi
 from colorama import Fore, Back, Style, init
 
 # Tu clave de API de VirusTotal
-API_KEY_VT = 'api_key'
-API_KEY_FS = 'api_key'
+API_KEY_VT = '4e603c3a01a10515c1b1da28ccf061540958ed1b7932867e458774a4771c785b'
+API_KEY_FS = 'zRsmCSFIW1fptPyA5LoMoTFrWNvh8hPjeXT1o2NK'
 URL_SERCH_VT = 'https://www.virustotal.com/api/v3/search'
 
 # Calcula el hash md5 para un archivo
@@ -87,7 +87,17 @@ def analizar_fs(api_key, path, isfile):
         if response.status_code == 200:
             data = response.json()
             verdict = data['overall_verdict']
+            headers_info = {
+                "accept": "application/json",
+                "X-Api-Key": api_key
+            }
+            id_report = data['filescan_reports'][0]['report_id']
+            response_info = requests.get('https://www.filescan.io/api/reports/' + id_report + '/chat-gpt', headers=headers_info)
+            data_info = response_info.json()
+
             if verdict == 'unknown' or verdict == 'informational':
+                print('Puedes buscar con el id en: ' + Fore.BLUE + 'https://filescan.io')
+                print('\tid: ' + Fore.MAGENTA + id_report + '\n')
                 # POST req
                 headers_id_file = {
                     "accept": "application/json",
@@ -100,7 +110,7 @@ def analizar_fs(api_key, path, isfile):
                     'extended_osint': 'true',
                     'input_file_yara': 'true',
                     'skip_whitelisted': 'true',
-                    'rapid_mode': 'true',
+                    'rapid_mode': 'false',
                     'whois': 'true',
                     'osint': 'true',
                     'is_private': 'true',
@@ -116,7 +126,7 @@ def analizar_fs(api_key, path, isfile):
                 }
                 # Archivo que deseas enviar (reemplaza 'hola' con la ruta correcta al archivo)
                 files= {
-                    'file': ('hola', open('hola', 'rb')),
+                    'file': (str(path), open(str(path), 'rb')),
                 }       
 
                 response_id_file = requests.post('https://www.filescan.io/api/scan/file', headers=headers_id_file, data=data_id_file, files=files)
@@ -135,6 +145,7 @@ def analizar_fs(api_key, path, isfile):
                             time.sleep(10)
                             response = requests.get('https://www.filescan.io/api/scan/' + id_file + '/report?filter=general', headers=headers_file)
                             data = response.json()
+
                         # Accede al resultado de "verdict" en cada informe
                         verdict = data['sourceArchive']['verdict']
                         
@@ -148,6 +159,10 @@ def analizar_fs(api_key, path, isfile):
                 else:
                     print('Error status code')
             else:
+                if data_info["data"] != None:
+                    print('\n' + data_info["data"] + '\n')
+                    print('Puedes buscar con el id en: ' + Fore.BLUE + 'https://filescan.io')
+                    print('\tid: ' + Fore.MAGENTA + id_report + '\n')
                 if 'malicious' in verdict:
                     color = Fore.RED
                 else:
