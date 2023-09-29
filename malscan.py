@@ -1,9 +1,10 @@
 import hashlib
 import os
 import sys
-import json
 import time
 import base64
+import json
+import subprocess
 from urllib.parse import quote
 import requests
 from virus_total_apis import PublicApi as VirusTotalPublicApi
@@ -13,6 +14,24 @@ from colorama import Fore, Back, Style, init
 API_KEY_VT = '4e603c3a01a10515c1b1da28ccf061540958ed1b7932867e458774a4771c785b'
 API_KEY_FS = 'zRsmCSFIW1fptPyA5LoMoTFrWNvh8hPjeXT1o2NK'
 URL_SERCH_VT = 'https://www.virustotal.com/api/v3/search'
+
+# Metadatos del archivo
+def metadatos_archivo(archivo):
+    print(Fore.CYAN +'\n>> Metadatos')
+    try:
+        # Comando para obtener los metadatos en formato JSON
+        comando = ['exiftool', '-json', archivo]
+
+        # Ejecutar el comando y obtener la salida
+        salida = subprocess.check_output(comando, stderr=subprocess.STDOUT, text=True)
+
+        # Analizar la salida JSON para obtener los metadatos
+        metadatos = json.loads(salida)
+
+        return metadatos[0] if metadatos else None
+
+    except subprocess.CalledProcessError as e:
+        return None
 
 # Calcula el hash md5 para un archivo
 def calcular_md5(path):
@@ -104,12 +123,12 @@ def analizar_vt(api_key, path, isfile):
                 data = response.json()
                 data_id = data['data'][0]['id']
                 if isfile:
-                    print('Puedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/file/'+ data_id +'/details')
+                    print('\tPuedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/file/'+ data_id +'/details')
                 else:
-                    print('Puedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/url/'+ data_id +'/details')
+                    print('\tPuedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/url/'+ data_id +'/details')
             else:
-                print(f"El archivo tiene {tamano_archivo_mb:.2f} MB y excede el límite de {limite_mb} MB.")
-                print('Tienes que subir el archivo manualmete a' +  + Fore.BLUE +'https://www.virustotal.com')
+                print(f"\tEl archivo tiene {tamano_archivo_mb:.2f} MB y excede el límite de {limite_mb} MB.")
+                print('\tTienes que subir el archivo manualmete a' +  + Fore.BLUE +'https://www.virustotal.com')
                         
         else:
             analysis = data['data'][0]['attributes']['last_analysis_stats']
@@ -117,15 +136,15 @@ def analizar_vt(api_key, path, isfile):
             data_id = data['data'][0]['id']
 
             if isfile:
-                print('Puedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/file/'+ data_id +'/details')
+                print('\tPuedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/file/'+ data_id +'/details')
             else:
-                print('Puedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/url/'+ data_id +'/details')
+                print('\tPuedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/url/'+ data_id +'/details')
 
             # Comprobar si al menos una categoría es "malicious"
             if analysis['malicious'] > 0 or (reputation <= 0 and isfile):
-                print(Fore.RED + "NO es seguro segun VirusTotal. Su CommunityScore es de " + str(reputation))
+                print(Fore.RED + "\tNO es seguro segun VirusTotal. Su CommunityScore es de " + str(reputation))
             else:
-                print(Fore.GREEN + "Es seguro segun VirusTotal. Su CommunityScore es de " + str(reputation))
+                print(Fore.GREEN + "\tEs seguro segun VirusTotal. Su CommunityScore es de " + str(reputation))
     else:
         print(Fore.YELLOW + "Error al buscar en VirusTotal")
 
@@ -150,7 +169,7 @@ def analizar_fs(api_key, path, isfile):
                 "X-Api-Key": api_key
             }
 
-            if verdict == 'unknown':
+            if verdict == 'unknown' or verdict == 'informational':
                 # POST req
                 headers_id_file = {
                     "accept": "application/json",
@@ -207,7 +226,7 @@ def analizar_fs(api_key, path, isfile):
                                 cadena_codificada_bytes = base64.b64encode(id_report.encode('utf-8'))
                                 # Convertir los bytes codificados a una cadena
                                 cadena_base64 = cadena_codificada_bytes.decode('utf-8')
-                                print('Puedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
+                                print('\tPuedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
                                 break
 
                         # Accede al resultado de "verdict" en cada informe
@@ -217,7 +236,7 @@ def analizar_fs(api_key, path, isfile):
                             color = Fore.RED
                         else:                
                             color = Fore.YELLOW
-                        print('Según filescan.io el archivo es ' + color + verdict)
+                        print('\tSegún filescan.io el archivo es ' + color + verdict)
                     else:
                         print('Respuesta vacía o no es un código de estado 200')
                 else:
@@ -231,12 +250,12 @@ def analizar_fs(api_key, path, isfile):
                     cadena_codificada_bytes = base64.b64encode(id_report.encode('utf-8'))
                     # Convertir los bytes codificados a una cadena
                     cadena_base64 = cadena_codificada_bytes.decode('utf-8')
-                    print('Puedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
+                    print('\tPuedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
                 if 'malicious' in verdict:
                     color = Fore.RED
                 else:
                     color = Fore.YELLOW
-                print('Según filescan.io el archivo es ' + color + verdict)
+                print('\tSegún filescan.io el archivo es ' + color + verdict)
         else:
             print('Algo ha ido mal en filescan.io')
     elif str(path).startswith("http://") or str(path).startswith("https://"):
@@ -281,16 +300,15 @@ def analizar_fs(api_key, path, isfile):
                 cadena_codificada_bytes = base64.b64encode(path.encode('utf-8'))
                 # Convertir los bytes codificados a una cadena
                 cadena_base64 = cadena_codificada_bytes.decode('utf-8')
-                print('Puedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
+                print('\tPuedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
                 if 'malicious' in verdict:
                     color = Fore.RED
                     break
                 else:                
                     color = Fore.YELLOW
-                print('Según filescan.io el enlace es ' + color + verdict)
+                print('\tSegún filescan.io el enlace es ' + color + verdict)
         else:
             print('Respuesta vacía o no es un código de estado 200')
-
 
 if __name__ == "__main__":
     # Inicializa colorama
@@ -313,5 +331,10 @@ if __name__ == "__main__":
         print('MD5: ' + calcular_md5(args))
         print('SHA1: ' + calcular_sha1(args))
         print('SHA256: ' + calcular_sha256sum(args))
+
+        metadatos = metadatos_archivo(args)
+        if metadatos:
+            for clave, valor in metadatos.items():
+                print(f"\t{clave}: {valor}")
         analizar_vt(API_KEY_VT, args, argisfile)
         analizar_fs(API_KEY_FS, args, argisfile)
