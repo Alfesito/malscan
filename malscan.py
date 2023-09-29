@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import time
+import base64
 from urllib.parse import quote
 import requests
 from virus_total_apis import PublicApi as VirusTotalPublicApi
@@ -28,6 +29,21 @@ def calcular_md5(path):
             return md5.hexdigest()
     except FileNotFoundError:
         return None
+    
+def calcular_sha1(archivo):
+    # Crear un objeto hash SHA-1
+    sha1 = hashlib.sha1()
+    # Leer el archivo en bloques y actualizar el objeto hash
+    with open(archivo, 'rb') as archivo:
+        while True:
+            bloque = archivo.read(65536)  # Leer 64KB a la vez (puedes ajustar el tamaño del bloque)
+            if not bloque:
+                break
+            sha1.update(bloque)
+
+    # Obtener el hash SHA-1 en formato hexadecimal
+    hash_sha1 = sha1.hexdigest()
+    return hash_sha1
 
 def calcular_sha256sum(archivo):
     sha256sum = hashlib.sha256()
@@ -58,33 +74,60 @@ def analizar_vt(api_key, path, isfile):
         # Obtener las categorías de análisis
         data = response.json()
         if data['data'] == []:
-            # Necesita subir el archivo para analizarlo
-            url_upload = "https://www.virustotal.com/api/v3/files"
-
-            files = { "file": (str(path), open(str(path), "rb"), "application/octet-stream") }
-            headers = {
-                "accept": "application/json",
-                "x-apikey": api_key
-            }
-
-            response = requests.post(url_upload, files=files, headers=headers)
-
-            data = response.json()
-            data_id = data['data']['id']
             print(Fore.YELLOW + 'No hay registro de este archivo en VirusTotal, se está subiendo en estos momentos')
-            print(Fore.YELLOW + 'Puedes ver los resultados con cualquiera de los hashes generados\n')
-            
+            # Tamaño del archivo objetivo            
+            tamano_archivo_bytes = os.path.getsize(path)
+            # Convertir el tamaño a megabytes (1 MB = 1024*1024 bytes)
+            tamano_archivo_mb = tamano_archivo_bytes / (1024 * 1024)
+            # Establecer el límite de 32MB
+            limite_mb = 32
+            # Comprobar si el archivo tiene menos de 32MB de capacidad
+            if tamano_archivo_mb < limite_mb:
+                print(f"El archivo tiene {tamano_archivo_mb:.2f} MB y cumple con el límite de {limite_mb} MB. Se está analizando")
+                # Necesita subir el archivo para analizarlo
+                url_upload = "https://www.virustotal.com/api/v3/files"
+                files = { "file": (str(path), open(str(path), "rb"), "application/octet-stream") }
+                headers = {
+                    "accept": "application/json",
+                    "x-apikey": api_key
+                }
+                #Sube el archivo a VirusTotal, si es mayor de 32MB, hay que hacerlo manualmete
+                response = requests.post(url_upload, files=files, headers=headers)
+                
+                # Peticion para ver resultados del análisis
+                time.sleep(1)
+                headers = {
+                    "accept": "application/json",
+                    "x-apikey": api_key
+                }
+                response = requests.get(URL_SERCH_VT+'?query='+str(query), headers=headers)
+                data = response.json()
+                data_id = data['data'][0]['id']
+                if isfile:
+                    print('Puedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/file/'+ data_id +'/details')
+                else:
+                    print('Puedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/url/'+ data_id +'/details')
+            else:
+                print(f"El archivo tiene {tamano_archivo_mb:.2f} MB y excede el límite de {limite_mb} MB.")
+                print('Tienes que subir el archivo manualmete a' +  + Fore.BLUE +'https://www.virustotal.com')
+                        
         else:
             analysis = data['data'][0]['attributes']['last_analysis_stats']
-            reputation = data['data'][0]['attributes']['reputation']           
+            reputation = data['data'][0]['attributes']['reputation']  
+            data_id = data['data'][0]['id']
+
+            if isfile:
+                print('Puedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/file/'+ data_id +'/details')
+            else:
+                print('Puedes ver el análisis en: '+ Fore.BLUE +'https://www.virustotal.com/gui/url/'+ data_id +'/details')
 
             # Comprobar si al menos una categoría es "malicious"
-            if analysis['malicious'] > 0 or (reputation < 0 and isfile):
-                print(Fore.RED + "[-] NO es seguro segun VirusTotal.")
+            if analysis['malicious'] > 0 or (reputation <= 0 and isfile):
+                print(Fore.RED + "NO es seguro segun VirusTotal. Su CommunityScore es de " + str(reputation))
             else:
-                print(Fore.GREEN + "[+] Es seguro segun VirusTotal.")
+                print(Fore.GREEN + "Es seguro segun VirusTotal. Su CommunityScore es de " + str(reputation))
     else:
-        print(Fore.YELLOW + "Error al buscar en VirusTotal.")
+        print(Fore.YELLOW + "Error al buscar en VirusTotal")
 
 # Analizando con https://www.filescan.io
 def analizar_fs(api_key, path, isfile):
@@ -107,7 +150,7 @@ def analizar_fs(api_key, path, isfile):
                 "X-Api-Key": api_key
             }
 
-            if verdict == 'unknown' or verdict == 'informational':
+            if verdict == 'unknown':
                 # POST req
                 headers_id_file = {
                     "accept": "application/json",
@@ -160,8 +203,11 @@ def analizar_fs(api_key, path, isfile):
                         for report_id, report_data in data['reports'].items():
                             if id_report == '':
                                 id_report = report_id
-                                print('Puedes buscar con el id en: ' + Fore.BLUE + 'https://filescan.io')
-                                print('\tid: ' + Fore.MAGENTA + id_report + '\n')
+                                # Codificar la cadena en Base64
+                                cadena_codificada_bytes = base64.b64encode(id_report.encode('utf-8'))
+                                # Convertir los bytes codificados a una cadena
+                                cadena_base64 = cadena_codificada_bytes.decode('utf-8')
+                                print('Puedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
                                 break
 
                         # Accede al resultado de "verdict" en cada informe
@@ -181,9 +227,11 @@ def analizar_fs(api_key, path, isfile):
                 response_info = requests.get('https://www.filescan.io/api/reports/' + id_report + '/chat-gpt', headers=headers_info)
                 data_info = response_info.json()
                 if data_info["data"] != None:
-                    print('\n' + data_info["data"] + '\n')
-                    print('Puedes buscar con el id en: ' + Fore.BLUE + 'https://filescan.io')
-                    print('\tid: ' + Fore.MAGENTA + id_report + '\n')
+                    # Codificar la cadena en Base64
+                    cadena_codificada_bytes = base64.b64encode(id_report.encode('utf-8'))
+                    # Convertir los bytes codificados a una cadena
+                    cadena_base64 = cadena_codificada_bytes.decode('utf-8')
+                    print('Puedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
                 if 'malicious' in verdict:
                     color = Fore.RED
                 else:
@@ -228,7 +276,12 @@ def analizar_fs(api_key, path, isfile):
             for report_id, report_data in data['reports'].items():
                 # Accede al resultado de "verdict" en cada informe
                 verdict = report_data['finalVerdict']['verdict']
-
+                id_report = report_id
+                # Codificar la cadena en Base64
+                cadena_codificada_bytes = base64.b64encode(path.encode('utf-8'))
+                # Convertir los bytes codificados a una cadena
+                cadena_base64 = cadena_codificada_bytes.decode('utf-8')
+                print('Puedes ver más información del enálisis en: ' + Fore.BLUE + 'https://www.filescan.io/search-result?query=' + cadena_base64)
                 if 'malicious' in verdict:
                     color = Fore.RED
                     break
@@ -248,7 +301,7 @@ if __name__ == "__main__":
 
     if not os.path.exists(args):
         if args:
-            print('Analisis de la url: ' + Fore.MAGENTA + args + '\n')
+            print('Analisis de la url: ' + Fore.MAGENTA + args)
             argisfile = False
             analizar_vt(API_KEY_VT, args, argisfile)
             analizar_fs(API_KEY_FS, args, argisfile)
@@ -258,6 +311,7 @@ if __name__ == "__main__":
     else:
         print('Analisis del achivo: ' + Fore.MAGENTA + args + '\n')
         print('MD5: ' + calcular_md5(args))
+        print('SHA1: ' + calcular_sha1(args))
         print('SHA256: ' + calcular_sha256sum(args))
         analizar_vt(API_KEY_VT, args, argisfile)
         analizar_fs(API_KEY_FS, args, argisfile)
