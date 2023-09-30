@@ -1,4 +1,4 @@
-# Antivirus Analysis Tool
+# Malscan a Malware Analysis Tool
 This Python script is designed to perform antivirus analysis on files and URLs using VirusTotal and FileScan.io APIs. It calculates various file hashes (MD5, SHA-1, SHA-256) and retrieves metadata using ExifTool for files. The analysis results are displayed in the console, including information on the file's safety status.
 
 ## Prerequisites
