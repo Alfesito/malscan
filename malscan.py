@@ -20,15 +20,11 @@ def file_metadata(file):
     try:
         # Command to get metadata in JSON format
         command = ['exiftool', '-json', file]
-
         # Execute the command and get the output
         output = subprocess.check_output(command, stderr=subprocess.STDOUT, text=True)
-
         # Parse the JSON output to get metadata
         metadata = json.loads(output)
-
         return metadata[0] if metadata else None
-
     except subprocess.CalledProcessError as e:
         return None
 
@@ -92,7 +88,7 @@ def analyze_vt(api_key, path, is_file):
         # Get analysis categories
         data = response.json()
         if data['data'] == []:
-            print(Fore.YELLOW + 'No record of this file on VirusTotal, it is being uploaded now')
+            print(Fore.YELLOW + '\tNo record of this file on VirusTotal, it is being uploaded now')
             # File size
             file_size_bytes = os.path.getsize(path)
             # Convert size to megabytes (1 MB = 1024*1024 bytes)
@@ -149,16 +145,22 @@ def analyze_vt(api_key, path, is_file):
 
 # Analyzing with https://www.filescan.io
 def analyze_fs(api_key, path, is_file):
-    print(Fore.CYAN + '\n>> Analyzing with filescan.io')
     # Analyze reputation on filescan.io
-    if is_file:
+    print(Fore.CYAN + '\n>> Analyzing with filescan.io')
+    file_size_bytes = os.path.getsize(path)
+    # Convert size to megabytes (1 MB = 1024*1024 bytes)
+    file_size_mb = file_size_bytes / (1024 * 1024)
+    # Set the limit to 32MB
+    limit_mb = 32
+    # Check if the file is under 32MB
+    if is_file and file_size_mb < limit_mb:
         sha256 = calculate_sha256sum(path)
 
         headers_sha256 = {
             "accept": "application/json",
             "X-Api-Key": api_key
         }
-        response = requests.get('https://www.filescan.io/api/reputation/hash?sha256=' + str(sha256), headers=headers_sha256)
+        response =  requests.get('https://www.filescan.io/api/reputation/hash?sha256=' + str(sha256), headers=headers_sha256)
 
         if response.status_code == 200:
             data = response.json()
@@ -200,8 +202,8 @@ def analyze_fs(api_key, path, is_file):
                     'file': (str(path), open(str(path), 'rb')),
                 }
 
-                response_id_file = requests.post('https://www.filescan.io/api/scan/file', headers=headers_id_file,
-                                                 data=data_id_file, files=files)
+                response_id_file =  requests.post('https://www.filescan.io/api/scan/file', headers=headers_id_file,
+                                                data=data_id_file, files=files)
                 if response_id_file.status_code == 200:
                     data_json = response_id_file.json()
                     id_file = data_json['flow_id']
@@ -210,13 +212,13 @@ def analyze_fs(api_key, path, is_file):
                         "accept": "application/json",
                         "X-Api-Key": api_key
                     }
-                    response = requests.get('https://www.filescan.io/api/scan/' + id_file + '/report?filter=general',
+                    response =  requests.get('https://www.filescan.io/api/scan/' + id_file + '/report?filter=general',
                                             headers=headers_file)
                     data = response.json()
-                    if response.status_code == 200:
+                    if response.status_code == 200 and data != 'unknown':
                         while data['allAdditionalStepsDone'] == False or data['sourceArchive']['verdict'] == 'unknown':
                             time.sleep(10)
-                            response = requests.get(
+                            response =  requests.get(
                                 'https://www.filescan.io/api/scan/' + id_file + '/report?filter=general',
                                 headers=headers_file)
                             data = response.json()
@@ -230,7 +232,7 @@ def analyze_fs(api_key, path, is_file):
                                 # Convert the encoded bytes to a string
                                 base64_string = encoded_string_bytes.decode('utf-8')
                                 print('\tYou can see more information about the analysis at: ' + Fore.BLUE +
-                                      'https://www.filescan.io/search-result?query=' + base64_string)
+                                    'https://www.filescan.io/search-result?query=' + base64_string)
                                 break
 
                         # Access the "verdict" result in each report
@@ -245,9 +247,10 @@ def analyze_fs(api_key, path, is_file):
                         print('Empty response or not a 200 status code')
                 else:
                     print('Error status code')
+        
             else:
                 id_report = data['filescan_reports'][0]['report_id']
-                response_info = requests.get(
+                response_info =  requests.get(
                     'https://www.filescan.io/api/reports/' + id_report + '/chat-gpt', headers=headers_info)
                 data_info = response_info.json()
                 
@@ -257,14 +260,17 @@ def analyze_fs(api_key, path, is_file):
                     # Convert the encoded bytes to a string
                     base64_string = encoded_string_bytes.decode('utf-8')
                     print('\tYou can see more information about the analysis at: ' + Fore.BLUE +
-                          'https://www.filescan.io/search-result?query=' + base64_string)
+                        'https://www.filescan.io/search-result?query=' + base64_string)
                 if 'malicious' in verdict:
                     color = Fore.RED
                 else:
                     color = Fore.YELLOW
                 print('\tAccording to filescan.io, the file is ' + color + verdict)
+
         else:
             print('Something went wrong on filescan.io')
+
+    # Para url
     elif str(path).startswith("http://") or str(path).startswith("https://"):
         url_encode = quote(path)
         headers_id = {
@@ -273,7 +279,7 @@ def analyze_fs(api_key, path, is_file):
             "Content-Type": "application/x-www-form-urlencoded"
         }
         data_id = 'save_preset=false&url=' + url_encode + '&tags=&propagate_tags=true&password=&is_private=false&skip_whitelisted=false'
-        response_id_url = requests.post('https://www.filescan.io/api/scan/url', headers=headers_id, data=data_id)
+        response_id_url =  requests.post('https://www.filescan.io/api/scan/url', headers=headers_id, data=data_id)
 
         if response_id_url.status_code == 200:
             data_json = response_id_url.json()
@@ -285,7 +291,7 @@ def analyze_fs(api_key, path, is_file):
             "accept": "application/json",
             "X-Api-Key": api_key
         }
-        response = requests.get('https://www.filescan.io/api/scan/' + id_url + '/report?filter=finalVerdict',
+        response =  requests.get('https://www.filescan.io/api/scan/' + id_url + '/report?filter=finalVerdict',
                                 headers=headers_report)
 
         if response.status_code == 200:
@@ -293,7 +299,7 @@ def analyze_fs(api_key, path, is_file):
             verdict_exists = True
             while verdict_exists:
                 time.sleep(5)
-                response = requests.get('https://www.filescan.io/api/scan/' + id_url + '/report?filter=finalVerdict',
+                response =  requests.get('https://www.filescan.io/api/scan/' + id_url + '/report?filter=finalVerdict',
                                         headers=headers_report)
                 data = response.json()
                 for report_id, report_data in data['reports'].items():
@@ -319,6 +325,9 @@ def analyze_fs(api_key, path, is_file):
                 print('\tAccording to filescan.io, the link is ' + color + verdict)
         else:
             print('Empty response or not a 200 status code')
+    else:
+        print(Fore.YELLOW + '\tCan not upload the file because of it size')
+        print('\tYou need to manually upload the file to ' + Fore.BLUE + 'https://filescan.io')
 
 if __name__ == "__main__":
     # Initialize colorama
