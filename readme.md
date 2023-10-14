@@ -25,12 +25,12 @@ You need to configure the following variables in the script:
 To analyze a file, run the script with the file's path as an argument:
 
 ```shell
-python malscan.py /path/to/your/file
+python3 malscan.py /path/to/your/file
 ```
 To analyze a URL, provide the URL as an argument:
 
 ```shell
-python malscan.py https://example.com
+python3 malscan.py https://example.com
 ```
 
 ## Output
